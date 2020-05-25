@@ -2,69 +2,96 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
+#include <functional>
 
 class SplayTree {
 public:
+    SplayTree() = default;
+
     explicit SplayTree(const std::vector<long long> &v) {
         for (int i = 0; i < v.size(); i++) {
-            tree = insert(tree, i + 1, v[i]);
+            tree_ = insert_(tree_, i + 1, v[i]);
         }
     }
 
     SplayTree(size_t size, long long initialValue) {
         for (int i = 0; i < size; i++) {
-            tree = insert(tree, i + 1, initialValue);
+            tree_ = insert_(tree_, i + 1, initialValue);
         }
     }
 
-    long long operator[](int i) {
-        return elementAt(tree, i + 1);
+    SplayTree(const SplayTree &other) {
+        tree_ = other.tree_ == nullptr ? new Node(*other.tree_) : nullptr;
+        lastQueryTime_ = other.lastQueryTime_;
     }
 
-    std::vector<long long> toVector() {
-        std::vector<long long> v;
-        print(tree, v);
-        return v;
+    SplayTree &operator=(const SplayTree &other) {
+        // copy-and-swap idiom
+        if (this == &other) {
+            return *this;
+        }
+        SplayTree tmp(other);
+        std::swap(tree_, tmp.tree_);
+        std::swap(lastQueryTime_, tmp.lastQueryTime_);
+        return *this;
+    }
+
+    ~SplayTree() {
+        delete tree_;
+    }
+
+    long long operator[](int i) {
+        return elementAt_(tree_, i + 1);
     }
 
     long long getSum(int l, int r) {
-        auto res = getSum(tree, l + 1, r + 1);
-        tree = res.second;
+        auto res = getSum_(tree_, l + 1, r + 1);
+        tree_ = res.second;
         return res.first;
     }
 
     void insert(int i, int x) {
-        tree = insert(tree, i + 1, x);
+        tree_ = insert_(tree_, i + 1, x);
     }
 
     void remove(int i) {
-        tree = remove(tree, i + 1);
+        tree_ = remove_(tree_, i + 1);
     }
 
     void assign(int l, int r, int x) {
-        tree = assign(tree, l + 1, r + 1, x, lastQueryTime);
+        tree_ = assign_(tree_, l + 1, r + 1, x, lastQueryTime_);
     }
 
     void add(int l, int r, int x) {
-        tree = add(tree, l + 1, r + 1, x, lastQueryTime);
+        tree_ = add_(tree_, l + 1, r + 1, x, lastQueryTime_);
     }
 
     void nextPermutation(int l, int r) {
-        tree = nextPermutation(tree, l + 1, r + 1);
+        tree_ = nextPermutation_(tree_, l + 1, r + 1);
     }
 
     void prevPermutation(int l, int r) {
-        tree = prevPermutation(tree, l + 1, r + 1);
+        tree_ = prevPermutation_(tree_, l + 1, r + 1);
     }
 
-    size_t size() {
-        return getSize(tree);
+    size_t size() const {
+        return getSize_(tree_);
+    }
+
+    std::vector<long long> toVector() {
+        std::vector<long long> result;
+        traverse_(tree_, [&result](Node *node) {
+            result.push_back(node->value);
+        });
+        return result;
     }
 
 private:
     struct Node;
+    SplayTree::Node *tree_ = nullptr;
 
-    SplayTree::Node *tree = nullptr;
+    struct Query;
+    int lastQueryTime_ = 0;
 
     enum Monotone {
         NON_INCREASING, NON_DECREASING, CONSTANT, NONE
@@ -83,9 +110,6 @@ private:
             return !operator==(q);
         }
     };
-
-
-    int lastQueryTime = 0;
 
     struct Node {
         int size = 1;
@@ -125,33 +149,86 @@ private:
                                                          maxValue(value),
                                                          firstValue(value),
                                                          lastValue(value) {}
+
+        Node(const Node &other) {
+            size = other.size;
+            value = other.value;
+            minValue = other.minValue;
+            maxValue = other.maxValue;
+            hasRev = other.hasRev;
+            addQuery = other.addQuery;
+            assignQuery = other.assignQuery;
+            firstValue = other.firstValue;
+            lastValue = other.lastValue;
+            sum = other.sum;
+            monotone = other.monotone;
+
+            if (other.left != nullptr) {
+                left = new Node(*other.left);
+            }
+            if (other.right != nullptr) {
+                right = new Node(*other.right);
+            }
+        }
+
+        Node &operator=(const Node &other) {
+            // copy-and-swap idiom
+            if (this == &other) {
+                return *this;
+            }
+            Node tmp(other);
+            swap(*this, tmp);
+            return *this;
+        }
+
+        ~Node() {
+            delete left;
+            delete right;
+        }
+
+        friend void swap(Node &a, Node &b) {
+            std::swap(a.size, b.size);
+            std::swap(a.value, b.value);
+            std::swap(a.minValue, b.minValue);
+            std::swap(a.maxValue, b.maxValue);
+            std::swap(a.hasRev, b.hasRev);
+            std::swap(a.addQuery, b.addQuery);
+            std::swap(a.assignQuery, b.assignQuery);
+            std::swap(a.firstValue, b.firstValue);
+            std::swap(a.lastValue, b.lastValue);
+            std::swap(a.sum, b.sum);
+            std::swap(a.monotone, b.monotone);
+            std::swap(a.left, b.left);
+            std::swap(a.right, b.right);
+            std::swap(a.parent, b.parent);
+        }
     };
 
-    static int getSize(Node *node) {
+    static int getSize_(Node *node) {
         return node == nullptr ? 0 : node->size;
     }
 
-    static long long getSum(Node *node) {
+    static long long getSum_(Node *node) {
         return node == nullptr ? 0 : node->sum;
     }
 
-    static long long getMinValue(Node *node) {
+    static long long getMinValue_(Node *node) {
         return node == nullptr ? INT64_MAX : node->minValue;
     }
 
-    static long long getMaxValue(Node *node) {
+    static long long getMaxValue_(Node *node) {
         return node == nullptr ? INT64_MIN : node->maxValue;
     }
 
 
-    static void setParent(Node *node, Node *parent) {
+    static void setParent_(Node *node, Node *parent) {
         if (node == nullptr) {
             return;
         }
         node->parent = parent;
     }
 
-    static void pushReverse(Node *node) {
+    static void pushReverse_(Node *node) {
         if (node == nullptr || !node->hasRev) {
             return;
         }
@@ -176,7 +253,7 @@ private:
     }
 
 
-    static void pushAssign(Node *node) {
+    static void pushAssign_(Node *node) {
         if (node == nullptr || node->assignQuery == Query::EMPTY) {
             return;
         }
@@ -191,7 +268,7 @@ private:
         }
 
         long long assignValue = node->assignQuery.value;
-        node->sum = assignValue * getSize(node);
+        node->sum = assignValue * getSize_(node);
         node->value = assignValue;
         node->firstValue = assignValue;
         node->lastValue = assignValue;
@@ -210,7 +287,7 @@ private:
         node->assignQuery = Query::EMPTY;
     }
 
-    static void updateAddQuery(Node *node, Query addQuery) {
+    static void updateAddQuery_(Node *node, Query addQuery) {
         if (node->assignQuery != Query::EMPTY) {
             node->assignQuery.value += addQuery.value;
             node->assignQuery.time = addQuery.time;
@@ -220,13 +297,13 @@ private:
         }
     }
 
-    static void pushAdd(Node *node) {
+    static void pushAdd_(Node *node) {
         if (node == nullptr || node->addQuery == Query::EMPTY) {
-            return;;
+            return;
         }
 
         long long addValue = node->addQuery.value;
-        node->sum += addValue * getSize(node);
+        node->sum += addValue * getSize_(node);
         node->value += addValue;
         node->firstValue += addValue;
         node->lastValue += addValue;
@@ -234,55 +311,55 @@ private:
         node->maxValue += addValue;
 
         if (node->left != nullptr) {
-            updateAddQuery(node->left, node->addQuery);
+            updateAddQuery_(node->left, node->addQuery);
         }
 
         if (node->right != nullptr) {
-            updateAddQuery(node->right, node->addQuery);
+            updateAddQuery_(node->right, node->addQuery);
         }
 
         node->addQuery = Query::EMPTY;
     }
 
-    static void push(Node *node) {
+    static void push_(Node *node) {
         if (node == nullptr) {
             return;
         }
 
-        pushReverse(node);
-        pushAssign(node);
-        pushAdd(node);
+        pushReverse_(node);
+        pushAssign_(node);
+        pushAdd_(node);
     }
 
-    static bool containsNonIncreasingSequence(Node *node) {
+    static bool containsNonIncreasingSequence_(Node *node) {
         return node == nullptr ? true : (node->monotone == CONSTANT || node->monotone == NON_INCREASING);
     }
 
-    static bool containsNonDecreasingSequence(Node *node) {
+    static bool containsNonDecreasingSequence_(Node *node) {
         return node == nullptr ? true : (node->monotone == CONSTANT || node->monotone == NON_DECREASING);
     }
 
-    static bool containsConstantSequence(Node *node) {
+    static bool containsConstantSequence_(Node *node) {
         return node == nullptr ? true : node->monotone == CONSTANT;
     }
 
-    static bool containsSequence(Node *node, Monotone type) {
+    static bool containsSequence_(Node *node, Monotone type) {
         switch (type) {
             case CONSTANT:
-                return containsConstantSequence(node);
+                return containsConstantSequence_(node);
             case NON_INCREASING:
-                return containsNonIncreasingSequence(node);
+                return containsNonIncreasingSequence_(node);
             case NON_DECREASING:
-                return containsNonDecreasingSequence(node);
+                return containsNonDecreasingSequence_(node);
             case NONE:
                 return true;
         }
         return false;
     }
 
-    static Monotone getMonotone(Node *node) {
+    static Monotone getMonotone_(Node *node) {
 
-        if (containsConstantSequence(node->left) && containsConstantSequence(node->right)) {
+        if (containsConstantSequence_(node->left) && containsConstantSequence_(node->right)) {
             bool isConstant = true;
             if (node->right != nullptr && node->right->minValue != node->value) {
                 isConstant = false;
@@ -295,7 +372,7 @@ private:
             }
         }
 
-        if (containsNonDecreasingSequence(node->left) && containsNonDecreasingSequence(node->right)) {
+        if (containsNonDecreasingSequence_(node->left) && containsNonDecreasingSequence_(node->right)) {
             if (node->right != nullptr && node->right->minValue < node->value) {
                 return NONE;
             }
@@ -305,7 +382,7 @@ private:
             return NON_DECREASING;
         }
 
-        if (containsNonIncreasingSequence(node->left) && containsNonIncreasingSequence(node->right)) {
+        if (containsNonIncreasingSequence_(node->left) && containsNonIncreasingSequence_(node->right)) {
             if (node->right != nullptr && node->right->maxValue > node->value) {
                 return NONE;
             }
@@ -318,22 +395,22 @@ private:
         return NONE;
     }
 
-    static void update(Node *node) {
+    static void update_(Node *node) {
         if (node == nullptr) {
             return;
         }
 
-        setParent(node->left, node);
-        setParent(node->right, node);
+        setParent_(node->left, node);
+        setParent_(node->right, node);
 
-        push(node->left);
-        push(node->right);
+        push_(node->left);
+        push_(node->right);
 
-        node->sum = getSum(node->left) + getSum(node->right) + node->value;
-        node->size = getSize(node->left) + getSize(node->right) + 1;
-        node->minValue = std::min(std::min(getMinValue(node->left), getMinValue(node->right)), node->value);
-        node->maxValue = std::max(std::max(getMaxValue(node->left), getMaxValue(node->right)), node->value);
-        node->monotone = getMonotone(node);
+        node->sum = getSum_(node->left) + getSum_(node->right) + node->value;
+        node->size = getSize_(node->left) + getSize_(node->right) + 1;
+        node->minValue = std::min(std::min(getMinValue_(node->left), getMinValue_(node->right)), node->value);
+        node->maxValue = std::max(std::max(getMaxValue_(node->left), getMaxValue_(node->right)), node->value);
+        node->monotone = getMonotone_(node);
 
         if (node->left != nullptr) {
             node->firstValue = node->left->firstValue;
@@ -348,7 +425,7 @@ private:
         }
     }
 
-    static void rotate(Node *parent, Node *child) {
+    static void rotate_(Node *parent, Node *child) {
         Node *grandParent = parent->parent;
         if (grandParent != nullptr) {
             if (grandParent->left == parent) {
@@ -366,17 +443,17 @@ private:
             child->left = parent;
         }
 
-        update(child);
-        update(parent);
-        update(grandParent);
+        update_(child);
+        update_(parent);
+        update_(grandParent);
 
-        setParent(child, grandParent);
+        setParent_(child, grandParent);
     }
 
-    static Node *splay(Node *v) {
-        push(v);
+    static Node *splay_(Node *v) {
+        push_(v);
         if (v->parent == nullptr) {
-            update(v);
+            update_(v);
             return v;
         }
 
@@ -384,77 +461,77 @@ private:
         Node *grandParent = parent->parent;
 
         if (grandParent == nullptr) {
-            rotate(parent, v);
-            update(v);
+            rotate_(parent, v);
+            update_(v);
             return v;
         }
         bool zigZig = (grandParent->left == parent) == (parent->left == v);
         if (zigZig) {
-            rotate(grandParent, parent);
-            rotate(parent, v);
+            rotate_(grandParent, parent);
+            rotate_(parent, v);
         } else {
-            rotate(parent, v);
-            rotate(grandParent, v);
+            rotate_(parent, v);
+            rotate_(grandParent, v);
         }
-        update(grandParent);
-        update(parent);
-        return splay(v);
+        update_(grandParent);
+        update_(parent);
+        return splay_(v);
     }
 
-    static Node *find(Node *v, int i) {
-        push(v);
+    static Node *find_(Node *v, int i) {
+        push_(v);
         if (v == nullptr) {
             return nullptr;
         }
-        int currentSize = getSize(v->left) + 1;
+        int currentSize = getSize_(v->left) + 1;
 
         if (i == currentSize) {
             return v;
         }
         if (i < currentSize && v->left != nullptr) {
-            return find(v->left, i);
+            return find_(v->left, i);
         }
         if (i > currentSize && v->right != nullptr) {
-            return find(v->right, i - currentSize);
+            return find_(v->right, i - currentSize);
         }
         return v;
     }
 
-    static long long elementAt(Node *node, int i) {
-        return find(node, i)->value;
+    static long long elementAt_(Node *node, int i) {
+        return find_(node, i)->value;
     }
 
-    static std::pair<Node *, Node *> split(Node *root, int i) {
+    static std::pair<Node *, Node *> split_(Node *root, int i) {
         if (root == nullptr) {
             return {nullptr, nullptr};
         }
-        push(root);
-        root = splay(find(root, i));
+        push_(root);
+        root = splay_(find_(root, i));
 
-        if (getSize(root) < i) {
+        if (getSize_(root) < i) {
             Node *right = root->right;
-            setParent(right, nullptr);
+            setParent_(right, nullptr);
 
             root->right = nullptr;
-            update(root);
-            update(right);
+            update_(root);
+            update_(right);
 
             return {root, right};
         } else {
             Node *left = root->left;
-            setParent(left, nullptr);
+            setParent_(left, nullptr);
 
             root->left = nullptr;
-            update(root);
-            update(left);
+            update_(root);
+            update_(left);
 
             return {left, root};
         }
     }
 
-    static Node *merge(Node *left, Node *right) {
-        push(left);
-        push(right);
+    static Node *merge_(Node *left, Node *right) {
+        push_(left);
+        push_(right);
 
         if (right == nullptr) {
             return left;
@@ -463,187 +540,174 @@ private:
             return right;
         }
 
-        left = splay(find(left, getSize(left)));
+        left = splay_(find_(left, getSize_(left)));
 
         left->right = right;
 
 
-        update(right);
-        update(left);
+        update_(right);
+        update_(left);
 
         return left;
     }
 
-    static Node *insert(Node *root, int pos, long long value) {
-        if (root == nullptr) {
-            return new Node(value);
-        }
-
-        auto splitted = split(root, pos);
-
-        Node *left = splitted.first;
-        Node *right = splitted.second;
-        root = new Node(value, left, right);
-        update(root);
-        return root;
-    }
-
-    static Node *remove(Node *root, int i) {
-        root = splay(find(root, i));
-
-        setParent(root->left, nullptr);
-        setParent(root->right, nullptr);
-
-        return merge(root->left, root->right);
-    }
-
-    static void print(Node *root, std::vector<long long> &accumulator) {
-        push(root);
+    static void traverse_(Node *root, const std::function<void(Node *)> &operation) {
+        push_(root);
         if (root == nullptr) {
             return;
         }
-        print(root->left, accumulator);
-        accumulator.push_back(root->value);
-        print(root->right, accumulator);
+        traverse_(root->left, operation);
+        operation(root);
+        traverse_(root->right, operation);
     }
 
-    static std::tuple<Node *, Node *, Node *> extractSegment(Node *root, int l, int r) {
+    static std::tuple<Node *, Node *, Node *> extractSegment_(Node *root, int l, int r) {
         Node *t1;
         Node *t2;
         Node *t3;
 
-        auto spl = split(root, l);
+        auto spl = split_(root, l);
         t1 = spl.first;
         t2 = spl.second;
 
-        spl = split(t2, r - l + 2);
+        spl = split_(t2, r - l + 2);
         t2 = spl.first;
         t3 = spl.second;
 
         return std::make_tuple(t1, t2, t3);
     }
 
-    static Node *add(Node *root, int l, int r, long long x, int &lastQueryTime) {
-        auto splitted = extractSegment(root, l, r);
-
+    static Node *makeOperationOnSubSegment_(Node *root, int l, int r,
+                                            const std::function<Node *(Node *)> &operation) {
+        auto splitted = extractSegment_(root, l, r);
         Node *t1 = std::get<0>(splitted);
         Node *t2 = std::get<1>(splitted);
         Node *t3 = std::get<2>(splitted);
 
-        push(t2);
-        t2->addQuery = {++lastQueryTime, x};
-
-        return merge(merge(t1, t2), t3);
+        t2 = operation(t2);
+        return merge_(merge_(t1, t2), t3);
     }
 
-    static Node *assign(Node *root, int l, int r, long long x, int &lastQueryTime) {
-        auto splitted = extractSegment(root, l, r);
+    static Node *insert_(Node *root, int pos, long long value) {
+        if (root == nullptr) {
+            return new Node(value);
+        }
 
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
+        auto splitted = split_(root, pos);
 
-        push(t2);
-        t2->assignQuery = {++lastQueryTime, x};
-
-        return merge(merge(t1, t2), t3);
+        Node *left = splitted.first;
+        Node *right = splitted.second;
+        root = new Node(value, left, right);
+        update_(root);
+        return root;
     }
 
-    static Node *reverse(Node *root, int l, int r) {
-        auto splitted = extractSegment(root, l, r);
-
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
-
-        push(t2);
-        t2->hasRev ^= true;
-
-        return merge(merge(t1, t2), t3);
+    static Node *remove_(Node *node, int i) {
+        return makeOperationOnSubSegment_(node, i, i, [](Node *treeSegment) {
+            delete treeSegment;
+            return nullptr;
+        });
     }
 
-    static std::pair<long long, Node *> getSum(Node *node, int l, int r) {
-        auto splitted = extractSegment(node, l, r);
 
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
+    static Node *add_(Node *node, int l, int r, long long x, int &lastQueryTime) {
+        return makeOperationOnSubSegment_(node, l, r, [&lastQueryTime, &x](Node *treeSegment) {
+            push_(treeSegment);
+            treeSegment->addQuery = {++lastQueryTime, x};
+            return treeSegment;
+        });
+    }
 
-        long long sum = getSum(t2);
+    static Node *assign_(Node *node, int l, int r, long long x, int &lastQueryTime) {
+        return makeOperationOnSubSegment_(node, l, r, [&lastQueryTime, &x](Node *treeSegment) {
+            push_(treeSegment);
+            treeSegment->assignQuery = {++lastQueryTime, x};
+            return treeSegment;
+        });
+    }
 
-        node = merge(merge(t1, t2), t3);
+    static Node *reverse_(Node *node, int l, int r) {
+        return makeOperationOnSubSegment_(node, l, r, [](Node *treeSegment) {
+            push_(treeSegment);
+            treeSegment->hasRev ^= true;
+            return treeSegment;
+        });
+    }
+
+    static std::pair<long long, Node *> getSum_(Node *node, int l, int r) {
+        long long sum;
+        node = makeOperationOnSubSegment_(node, l, r, [&sum](Node *treeSegment) {
+            sum = getSum_(treeSegment);
+            return treeSegment;
+        });
         return {sum, node};
     }
 
 
-    static std::pair<long long, Node *> getMin(Node *root, int l, int r) {
-        auto splitted = extractSegment(root, l, r);
-
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
-
-        long long minValue = getMinValue(t2);
-
-        root = merge(merge(t1, t2), t3);
-        return {minValue, root};
+    static std::pair<long long, Node *> getMin_(Node *node, int l, int r) {
+        long long minValue;
+        node = makeOperationOnSubSegment_(node, l, r, [&minValue](Node *treeSegment) {
+            minValue = getMinValue_(treeSegment);
+            return treeSegment;
+        });
+        return {minValue, node};
     }
 
-    static int indexOf(Node *root, Node *v) {
+    static int indexOf_(Node *root, Node *v) {
         std::vector<Node *> path = {v};
         while (v->parent != nullptr) {
             path.push_back(v->parent);
             v = v->parent;
         }
         std::reverse(path.begin(), path.end());
-        int pos = getSize(root->left) + 1;
+        int pos = getSize_(root->left) + 1;
         for (int i = 0; i + 1 < path.size(); i++) {
             Node *currentVertex = path[i];
             Node *child = path[i + 1];
-            push(currentVertex);
+            push_(currentVertex);
             if (child == currentVertex->left) {
-                pos -= getSize(currentVertex->left->right) + 1;
+                pos -= getSize_(currentVertex->left->right) + 1;
             } else {
-                pos += getSize(currentVertex->right->left) + 1;
+                pos += getSize_(currentVertex->right->left) + 1;
             }
         }
         return pos;
     }
 
 
-    static int getMonotoneSuffix(Node *v, Monotone type) {
-        push(v);
-        update(v);
+    static int getMonotoneSuffix_(Node *v, Monotone type) {
+        push_(v);
+        update_(v);
 
         if (v == nullptr) {
             return 0;
         }
-        if (containsSequence(v, type)) {
-            return getSize(v);
+        if (containsSequence_(v, type)) {
+            return getSize_(v);
         }
 
-        int ans = getMonotoneSuffix(v->right, type);
+        int ans = getMonotoneSuffix_(v->right, type);
 
-        if (getSize(v->right) == ans) {
+        if (getSize_(v->right) == ans) {
             if (type == NON_INCREASING && (v->right ? v->value >= v->right->firstValue : true)) {
                 ans++;
-                update(v);
+                update_(v);
                 if ((v->left ? v->left->lastValue >= v->value : true)) {
-                    ans += getMonotoneSuffix(v->left, type);
+                    ans += getMonotoneSuffix_(v->left, type);
                 }
             } else if (type == NON_DECREASING && (v->right ? v->value <= v->right->firstValue : true)) {
                 ans++;
-                update(v);
+                update_(v);
                 if ((v->left ? v->left->lastValue <= v->value : true)) {
-                    ans += getMonotoneSuffix(v->left, type);
+                    ans += getMonotoneSuffix_(v->left, type);
                 }
             }
         }
         return std::max(ans, 1);
     }
 
-    static Node *swapSegments(Node *root, int l1, int r1, int l2, int r2) {
-        auto splitted1 = extractSegment(root, l1 + 1, r1 + 1);
+    static Node *swapSegments_(Node *root, int l1, int r1, int l2, int r2) {
+        auto splitted1 = extractSegment_(root, l1, r1);
 
         Node *t1 = std::get<0>(splitted1);
         Node *t2 = std::get<1>(splitted1);
@@ -651,188 +715,174 @@ private:
 
         l2 -= r1;
         r2 -= r1;
-        auto splitted2 = extractSegment(t3, l2, r2);
+        auto splitted2 = extractSegment_(t3, l2, r2);
         Node *t4 = std::get<0>(splitted2);
         Node *t5 = std::get<1>(splitted2);
         Node *t6 = std::get<2>(splitted2);
 
-        return merge(merge(merge(merge(t1, t5), t4), t2), t6);
+        return merge_(merge_(merge_(merge_(t1, t5), t4), t2), t6);
     }
 
-    static Node *getMinimalGreater(Node *node, long long value) {
+    static Node *
+    getClosestNodeByValue_(Node *node, long long value, const std::function<bool(long long, long long)> &comparator) {
         if (node == nullptr) {
             return nullptr;
         }
 
-        push(node);
+        push_(node);
 
-        if (node->value > value) {
-            Node *rightAns = getMinimalGreater(node->right, value);
+        if (comparator(node->value, value)) {
+            Node *rightAns = getClosestNodeByValue_(node->right, value, comparator);
             return rightAns != nullptr ? rightAns : node;
         }
 
-        return getMinimalGreater(node->left, value);
+        return getClosestNodeByValue_(node->left, value, comparator);
     }
 
-    static std::pair<Node *, Node *> getMinimalGreater(Node *node, int l, int r, long long value) {
-        auto splitted = extractSegment(node, l, r);
-
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
-
-        return {getMinimalGreater(t2, value), merge(merge(t1, t2), t3)};
+    static std::pair<Node *, Node *> getMinimalGreater_(Node *node, int l, int r, long long value) {
+        Node *minimalGreater;
+        node = makeOperationOnSubSegment_(node, l, r, [&minimalGreater, &value](Node *treeSegment) {
+            minimalGreater = getClosestNodeByValue_(treeSegment, value, std::greater<>());
+            return treeSegment;
+        });
+        return {minimalGreater, node};
     }
 
-    static Node *getMaximalLess(Node *node, long long value) {
-        if (node == nullptr) {
-            return nullptr;
-        }
+    static std::pair<Node *, Node *> getMaximalLess_(Node *node, int l, int r, long long value) {
+        Node *maximalLess;
+        node = makeOperationOnSubSegment_(node, l, r, [&maximalLess, &value](Node *treeSegment) {
+            maximalLess = getClosestNodeByValue_(treeSegment, value, std::less<>());
+            return treeSegment;
+        });
+        return {maximalLess, node};
+    }
 
-        push(node);
+    static Node *makePermutation_(Node *root, int l, int r, bool isNext) {
+        return makeOperationOnSubSegment_(root, l, r, [&isNext](Node *tree) {
+            int monotoneSuffixLength = getMonotoneSuffix_(tree, isNext ? NON_INCREASING : NON_DECREASING);
+            int pivotPosition = std::max(1, tree->size - monotoneSuffixLength);
+            long long pivotValue = elementAt_(tree, pivotPosition);
 
-        if (node->value < value) {
-            Node *rightAns = getMaximalLess(node->right, value);
-            return rightAns != nullptr ? rightAns : node;
-        }
-        return getMaximalLess(node->left, value);
+            std::pair<Node *, Node *> res;
+
+            if (isNext) {
+                res = getMinimalGreater_(tree, pivotPosition + 1, getSize_(tree), pivotValue);
+            } else {
+                res = getMaximalLess_(tree, pivotPosition + 1, getSize_(tree), pivotValue);
+            }
+            Node *closestNode = res.first;
+            tree = res.second;
+
+            if (closestNode == nullptr) {
+                return reverse_(tree, 1, getSize_(tree));
+            }
+
+            int indexOfClosestNode = indexOf_(tree, closestNode);
+
+            tree = swapSegments_(tree, pivotPosition, pivotPosition, indexOfClosestNode, indexOfClosestNode);
+
+            return reverse_(tree, pivotPosition + 1, getSize_(tree));
+        });
     }
 
 
-    static std::pair<Node *, Node *> getMaximalLess(Node *node, int l, int r, long long value) {
-        auto splitted = extractSegment(node, l, r);
-
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
-
-        return {getMaximalLess(t2, value), merge(merge(t1, t2), t3)};
+    static Node *nextPermutation_(Node *root, int l, int r) {
+        return makePermutation_(root, l, r, true);
     }
 
-    static Node *nextPermutation(Node *root, int l, int r) {
-        auto splitted = extractSegment(root, l, r);
-
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
-
-        Node *v = t2;
-        int nonIncreasingSuffixLength = getMonotoneSuffix(v, NON_INCREASING);
-        int pivotPosition = std::max(1, v->size - nonIncreasingSuffixLength);
-        long long pivotValue = elementAt(v, pivotPosition);
-
-        auto res = getMinimalGreater(v, pivotPosition + 1, getSize(v), pivotValue);
-        Node *firstGreater = res.first;
-        v = res.second;
-
-        if (firstGreater == nullptr) {
-            v = reverse(v, 1, getSize(v));
-            return merge(merge(t1, v), t3);
-        }
-
-        int indexOfFirstGreater = indexOf(v, firstGreater);
-
-        v = swapSegments(v, pivotPosition - 1, pivotPosition - 1, indexOfFirstGreater - 1, indexOfFirstGreater - 1);
-
-        v = reverse(v, pivotPosition + 1, getSize(v));
-
-        return merge(merge(t1, v), t3);
-    }
-
-    static Node *prevPermutation(Node *root, int l, int r) {
-        auto splitted = extractSegment(root, l, r);
-
-        Node *t1 = std::get<0>(splitted);
-        Node *t2 = std::get<1>(splitted);
-        Node *t3 = std::get<2>(splitted);
-
-        Node *v = t2;
-        int nonDecreasingSuffixLength = getMonotoneSuffix(v, NON_DECREASING);
-        int pivotPosition = std::max(1, v->size - nonDecreasingSuffixLength);
-        long long pivotValue = elementAt(v, pivotPosition);
-
-        auto res = getMaximalLess(v, pivotPosition + 1, getSize(v), pivotValue);
-        Node *firstLess = res.first;
-        v = res.second;
-
-        if (firstLess == nullptr) {
-            v = reverse(v, 1, getSize(v));
-            return merge(merge(t1, v), t3);
-        }
-
-        int indexOfFirstLess = indexOf(v, firstLess);
-
-        v = swapSegments(v, pivotPosition - 1, pivotPosition - 1, indexOfFirstLess - 1, indexOfFirstLess - 1);
-
-        v = reverse(v, pivotPosition + 1, getSize(v));
-
-        return merge(merge(t1, v), t3);
+    static Node *prevPermutation_(Node *root, int l, int r) {
+        return makePermutation_(root, l, r, false);
     }
 };
 
 const SplayTree::Query SplayTree::Query::EMPTY = {0, 0};
 
+void readTree(SplayTree &tree, std::istream &in) {
+    size_t treeSize;
+    in >> treeSize;
+    for (size_t i = 0; i < treeSize; i++) {
+        long long x;
+        in >> x;
+        tree.insert(tree.size(), x);
+    }
+}
+
+void printTree(SplayTree &tree, std::ostream &out) {
+    auto treeVector = tree.toVector();
+    for (long long element : treeVector) {
+        out << element << " ";
+    }
+}
+
+void processQuery(SplayTree &tree, std::istream &in, std::ostream &out) {
+    int type;
+    in >> type;
+    switch (type) {
+        case 1: {
+            int l, r;
+            in >> l >> r;
+            out << tree.getSum(l, r) << "\n";
+            break;
+        }
+        case 2: {
+            int pos, x;
+            in >> x >> pos;
+            tree.insert(pos, x);
+            break;
+        }
+        case 3: {
+            int pos;
+            in >> pos;
+            tree.remove(pos);
+            break;
+        }
+        case 4: {
+            int x, l, r;
+            in >> x >> l >> r;
+            tree.assign(l, r, x);
+            break;
+        }
+        case 5: {
+            int x, l, r;
+            in >> x >> l >> r;
+            tree.add(l, r, x);
+            break;
+        }
+        case 6: {
+            int l, r;
+            in >> l >> r;
+            tree.nextPermutation(l, r);
+            break;
+        }
+        case 7: {
+            int l, r;
+            in >> l >> r;
+            tree.prevPermutation(l, r);
+            break;
+        }
+        default:
+            return;
+    }
+}
+
+void solveProblem(std::istream &in, std::ostream &out) {
+    SplayTree tree;
+    readTree(tree, in);
+
+    int countOfQueries = 0;
+    in >> countOfQueries;
+
+    for (int i = 0; i < countOfQueries; i++) {
+        processQuery(tree, in, out);
+    }
+
+    printTree(tree, out);
+}
+
 int main() {
     std::ios_base::sync_with_stdio(false);
-    std::cin.tie(0);
-    std::cout.tie(0);
+    std::cin.tie(nullptr);
+    std::cout.tie(nullptr);
 
-    int n;
-    std::cin >> n;
-    std::vector<long long> initialData(n);
-    for (int i = 0; i < n; i++) {
-        std::cin >> initialData[i];
-    }
-    SplayTree tree(initialData);
-
-    int q;
-    std::cin >> q;
-    for (int i = 0; i < q; i++) {
-        int type;
-        std::cin >> type;
-        if (type == 3) {
-            int pos;
-            std::cin >> pos;
-            tree.remove(pos);
-        }
-        if (type == 2) {
-            long long pos, x;
-            std::cin >> x >> pos;
-            tree.insert(pos, x);
-        }
-
-        if (type == 1) {
-            int l, r;
-            std::cin >> l >> r;
-            std::cout << tree.getSum(l, r) << "\n";
-        }
-        if (type == 4) {
-            long long x, l, r;
-            std::cin >> x >> l >> r;
-            tree.assign(l, r, x);
-        }
-
-        if (type == 5) {
-            long long x, l, r;
-            std::cin >> x >> l >> r;
-            tree.add(l, r, x);
-        }
-
-        if (type == 6) {
-            int l, r;
-            std::cin >> l >> r;
-            tree.nextPermutation(l, r);
-        }
-
-        if (type == 7) {
-            int l, r;
-            std::cin >> l >> r;
-            tree.prevPermutation(l, r);
-        }
-    }
-
-    auto treeVector = tree.toVector();
-    for (auto e : treeVector) {
-        std::cout << e << " ";
-    }
+    solveProblem(std::cin, std::cout);
 }
